@@ -58,7 +58,7 @@ jobs:
       - name: Get the next version for the repo
         id: version
         uses: im-open/git-version-lite@v2
-      
+
       - run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
 
   check-for-changes:
@@ -69,7 +69,7 @@ jobs:
       NEXT_VERSION: ${{ needs.calculate-next-version.outputs.NEXT_VERSION }}
       IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
       NEEDS_COMMIT: false
-      
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -87,15 +87,18 @@ jobs:
           folders-with-code: ${{ inputs.folders-with-code }} # Default is 'src,dist'
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - run: echo "The PR contains code changes - ${{ steps.action-code.outputs.HAS_CHANGES}}"
-      - run: echo "The PR is from a forked repo - ${{ env.IS_FORK }}"
-      - run: echo "The next action version will be - ${{ env.NEXT_VERSION }}"
+      - name: The PR contains code changes - ${{ steps.action-code.outputs.HAS_CHANGES}}
+        run: echo "The PR contains code changes - ${{ steps.action-code.outputs.HAS_CHANGES}}"
+      - name: The PR is from a forked repo - ${{ env.IS_FORK }}
+        run: echo "The PR is from a forked repo - ${{ env.IS_FORK }}"
+      - name: The next action version will be - ${{ env.NEXT_VERSION }}
+        run: echo "The next action version will be - ${{ env.NEXT_VERSION }}"
 
-      - name: Recompile and Format action if changes to action code are detected
+      - name: If code changed - Recompile and Format action
         if: steps.action-code.outputs.HAS_CHANGES == 'true'
         run: ${{ inputs.build-command }} # Default value is 'npm run build'
 
-      - name: Update readme with next version if changes to action code are detected
+      - name: If code changed - Update readme with next version
         if: steps.action-code.outputs.HAS_CHANGES == 'true'
         uses: im-open/update-action-version-in-file@v1.0.0
         with:
@@ -103,7 +106,7 @@ jobs:
           action-name: ${{ inputs.action-name }} # Default: '${{ github.repository }}'
           updated-version: ${{ env.NEXT_VERSION }}
 
-      - name: Check for unstaged readme/recompile changes if changes to action code are detected
+      - name: If code changed - Check for unstaged readme/recompile changes
         if: steps.action-code.outputs.HAS_CHANGES == 'true'
         run: |
           if [[ "$(git status --porcelain)" != "" ]]; then
@@ -114,8 +117,10 @@ jobs:
             echo "NEEDS_COMMIT=false" >> "$GITHUB_ENV"
           fi
 
+      #----------------------------------------
       # Steps for Non-Forked Repos
-      - name: Commit unstaged changes if a non-forked repo PR needs changes
+      #----------------------------------------
+      - name: If code changed in non-forked repo - Commit unstaged changes
         if: env.NEEDS_COMMIT == 'true' && env.IS_FORK == 'false'
         run: |
           git config user.name github-actions
@@ -123,9 +128,15 @@ jobs:
           git add .
           git commit -m "Update readme with latest version and/or recompile the action."
           git push origin HEAD:${{ github.head_ref }}
+      - name: If code changed in non-forked repo - Generate status check
+        if: env.NEEDS_COMMIT == 'true' && env.IS_FORK == 'false'
+        run: |
+          echo "hey"
 
+      #----------------------------------------
       # Steps for Forked Repos
-      - name: Construct failing workflow summary if a forked repo PR needs changes
+      #----------------------------------------
+      - name: If code changed in forked repo - Construct failing workflow summary
         if: env.NEEDS_COMMIT == 'true' && env.IS_FORK == 'true'
         id: summary
         uses: actions/github-script@v6
@@ -134,4 +145,11 @@ jobs:
             const summary = `This PR needs a few updates before it can be merged.  Please ensure the following changes are made:
             - Recompile the action by running \`${{ inputs.build-command }}\` from the root of the repository
             - Update the version for all instances of this action in the ${{ inputs.readme-location }}.  It should be changed to: \`uses: im-open/${{ inputs.action-name }}@${{ env.NEXT_VERSION }}\``;
-            core.setFailed(summary);
+            core.error(summary);
+            core.setOutput('summary', summary);
+
+      - name: If code changed in forked repo - Fail the workflow
+        if: always() && env.NEEDS_COMMIT == 'true' && env.IS_FORK == 'true'
+        run: |
+          echo '${{ steps.summary.outputs.summary }}' >> $GITHUB_STEP_SUMMARY
+          exit 1
