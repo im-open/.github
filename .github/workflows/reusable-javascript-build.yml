@@ -66,7 +66,7 @@ jobs:
 
       - name: Check for code changes to the action source code
         id: source-code
-        uses: im-open/did-custom-action-code-change@v1.0.1
+        uses: im-open/did-custom-action-code-change@v1
         with:
           files-with-code: ${{ inputs.files-with-code}} # Default is 'action.yml,package.json,package-lock.json'
           folders-with-code: ${{ inputs.folders-with-code }} # Default is 'src,dist'
@@ -120,7 +120,7 @@ jobs:
 
       - name: Update readme with next version - ${{ env.NEXT_VERSION }}
         if: env.HAS_CODE_CHANGES == 'true'
-        uses: im-open/update-action-version-in-file@v1.0.0
+        uses: im-open/update-action-version-in-file@v1
         with:
           file-to-update: ${{ inputs.readme-location }} # Default: './README.md'
           action-name: ${{ inputs.action-name }} # Default: '${{ github.repository }}'
