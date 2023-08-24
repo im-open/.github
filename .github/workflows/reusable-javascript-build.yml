@@ -13,11 +13,6 @@ on:
         required: false
         type: string
         default: main
-      node-version:
-        description: version of node to build the action with
-        required: false
-        type: string
-        default: 16.x
       files-with-code:
         description: The files that contain code for the action
         required: false
