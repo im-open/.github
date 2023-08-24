@@ -13,6 +13,11 @@ on:
         required: false
         type: string
         default: main
+      readme-location:
+        description: The location of the readme file
+        required: false
+        type: string
+        default: './README.md'
       files-with-code:
         description: The files that contain code for the action
         required: false
@@ -28,14 +33,9 @@ on:
         required: false
         type: string
         default: 'npm run build'
-      readme-location:
-        description: The location of the readme file
-        required: false
-        type: string
-        default: './README.md'
     secrets:
       PIPELINE_BOT_PAT:
-        description: 'A PAT with permission to commit changes on branch repositories.  This does not apply if the PR is from a fork.'
+        description: 'A PAT with permission to commit changes on branch PRs.  This does not apply if the PR is from a fork.'
         required: false
 
 jobs:
