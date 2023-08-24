@@ -8,7 +8,7 @@ on:
         type: string
         default: main
 jobs:
-  increment-version:
+  version:
     if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == inputs.default-branch
 
     runs-on: ubuntu-latest
