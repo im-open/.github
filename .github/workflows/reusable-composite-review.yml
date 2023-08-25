@@ -1,4 +1,4 @@
-name: Build and Review PR
+name: Review PR
 
 on:
   workflow_call:
@@ -22,17 +22,12 @@ on:
         description: The files that contain code for the action
         required: false
         type: string
-        default: 'action.yml,package.json,package-lock.json'
+        default: 'action.yml'
       folders-with-code:
         description: The folders that contain code for the action
         required: false
         type: string
-        default: 'src,dist'
-      build-command:
-        description: The npm script to run to build the action
-        required: false
-        type: string
-        default: 'npm run build'
+        default: 'src'
     secrets:
       PIPELINE_BOT_PAT:
         description: 'A PAT with permission to commit changes on branch PRs.  This does not apply if the PR is from a fork.'
@@ -70,7 +65,7 @@ jobs:
       - name: The PR has source code changes - ${{ steps.source-code.outputs.HAS_CHANGES }}
         run: echo "The PR has source code changes (not just things like readmes or builds) - ${{ steps.source-code.outputs.HAS_CHANGES}}"
 
-  build-and-review-pr:
+  review-pr:
     runs-on: ubuntu-latest
     needs: [setup-build]
 
@@ -109,10 +104,6 @@ jobs:
         if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'true'
         uses: actions/checkout@v3
 
-      - name: Build and Recompile action
-        if: env.HAS_CODE_CHANGES == 'true'
-        run: ${{ inputs.build-command }} # Default value is 'npm run build'
-
       - name: Update readme with next version - ${{ env.NEXT_VERSION }}
         if: env.HAS_CODE_CHANGES == 'true'
         uses: im-open/update-action-version-in-file@v1
@@ -121,14 +112,14 @@ jobs:
           action-name: ${{ inputs.action-name }} # Default: '${{ github.repository }}'
           updated-version: ${{ env.NEXT_VERSION }}
 
-      - name: Check for unstaged recompile or readme changes
+      - name: Check for unstaged readme changes
         if: env.HAS_CODE_CHANGES == 'true'
         run: |
           if [[ "$(git status --porcelain)" != "" ]]; then
-            echo "There are changes to commit"
+            echo "There are readme changes to commit"
             echo "NEEDS_COMMIT=true" >> "$GITHUB_ENV"
           else
-            echo "There were no changes to commit"
+            echo "There were no readme changes to commit"
             echo "NEEDS_COMMIT=false" >> "$GITHUB_ENV"
           fi
 
@@ -142,7 +133,7 @@ jobs:
           git config user.email im-pipeline-bot@wtwco.com
 
           git add .
-          git commit -m "Update readme with latest tag and/or recompile the action."
+          git commit -m "Update readme with latest tag."
           git push origin HEAD:${{ github.head_ref }}
 
       # -----------------------------------------
@@ -154,8 +145,7 @@ jobs:
         uses: actions/github-script@v6
         with:
           script: |
-            const summary = `This PR needs a few updates before it can be merged.  Please ensure the following steps have been manually completed:
-            - Recompile the action by running \`${{ inputs.build-command }}\` from the root of the repository
+            const summary = `This PR needs an update before it can be merged.  Please:
             - Update the version for all instances of this action in the ${{ inputs.readme-location }} file.  It should be changed to: 
               \`uses: ${{ inputs.action-name }}@${{ env.NEXT_VERSION }}\``;
             core.setOutput('summary', summary);
