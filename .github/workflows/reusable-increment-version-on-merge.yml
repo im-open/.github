@@ -7,40 +7,89 @@ on:
         required: false
         type: string
         default: main
+      files-with-code:
+        description: The files that contain code for the action
+        required: false
+        type: string
+        default: 'action.yml,package.json,package-lock.json'
+      dirs-with-code:
+        description: The directories that contain code for the action
+        required: false
+        type: string
+        default: 'src,dist'
 jobs:
-  version:
-    if: github.event.pull_request.merged == true && github.event.pull_request.base.ref == inputs.default-branch
-
+  increment-version:
     runs-on: ubuntu-latest
+    env:
+      MERGE_TO_MAIN: 'false'
 
     steps:
-      # Generally speaking, when the PR contents are treated as passive data, i.e. not in a
-      # position  of influence over the build/testing process, it is safe to checkout the code
-      # on a pull_request_target (which most of the builds using this reusable workflow use).  
-      # In this case it should be fine because changes will have been reviewed before this 
-      # workflow is triggered, and we are checking out the default branch.
-      - name: Checkout Repository
+      - name: Check if merge to default branch
+        id: merge
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const defaultBranch = '${{ inputs.default-branch }}';
+            const baseRef = '${{ github.event.pull_request.base.ref }}';
+            const merged = ${{ github.event.pull_request.merged }};
+
+            if (!merged){
+              console.log('PR is not merged.  Skipping subsequent steps.');
+              core.exportVariable('MERGE_TO_MAIN', false);
+              return;
+            }
+            if (baseRef !== defaultBranch){
+              console.log(`PR is merged to ${baseRef} and not ${defaultBranch}.  Skipping subsequent steps.`);
+              core.exportVariable('MERGE_TO_MAIN', false);
+              return;
+            }
+            console.log(`PR is merged to ${defaultBranch}.  Proceed with subsequent steps.`);
+            core.exportVariable('MERGE_TO_MAIN', true);
+
+      - name: If PR is merged to ${{ inputs.default-branch }} - Check for code changes to the action source code
+        if: env.MERGE_TO_MAIN == 'true'
+        id: source-code
+        uses: im-open/did-custom-action-code-change@v1
+        with:
+          files-with-code: ${{ inputs.files-with-code}}   # Default is 'action.yml,package.json,package-lock.json'
+          folders-with-code: ${{ inputs.dirs-with-code }} # Default is 'src,dist'
+          token: ${{ secrets.GITHUB_TOKEN }}
+ 
+      - name: If PR is merged to ${{ inputs.default-branch }} - Print whether Action Source Code Changed - ${{ steps.source-code.outputs.HAS_CHANGES }}
+        if: env.MERGE_TO_MAIN == 'true'
+        run: |
+          if [ "${{ steps.source-code.outputs.HAS_CHANGES }}" == "true" ]; then
+            echo "The PR changes the action's source code.  Proceed with subsequent steps."
+          else
+            echo "The PR does not change the action's source code.  Skipping subsequent steps."
+          fi
+      
+      - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Checkout
+        if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         uses: actions/checkout@v3
         with:
           ref: ${{ inputs.default-branch }}
           fetch-depth: 0
 
-      # See https://github.com/im-open/git-version-lite for more details around how to increment
-      # major/minor/patch through commit messages
-      - name: Increment the version
-        uses: im-open/git-version-lite@v2
+      - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Get the next version for the repo
+        if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         id: version
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          default-release-type: major
+        uses: im-open/git-version-lite@v2
 
-      - name: Create version tag, create or update major, and minor tags
+      - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Print action version (${{ steps.version.outputs.NEXT_VERSION || 'N/A'}})
+        if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
+        run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
+    
+      - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Push tags to repo
+        if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
+
           git tag ${{ steps.version.outputs.NEXT_VERSION }} ${{ github.sha }}
           git tag -f ${{ steps.version.outputs.NEXT_MAJOR_VERSION }} ${{ github.sha }}
           git tag -f ${{ steps.version.outputs.NEXT_MINOR_VERSION }} ${{ github.sha }}
+
           git push origin ${{ steps.version.outputs.NEXT_VERSION }}
           git push origin ${{ steps.version.outputs.NEXT_MAJOR_VERSION }} -f
           git push origin ${{ steps.version.outputs.NEXT_MINOR_VERSION }} -f

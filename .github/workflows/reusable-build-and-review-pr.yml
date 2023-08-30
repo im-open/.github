@@ -23,8 +23,8 @@ on:
         required: false
         type: string
         default: 'action.yml,package.json,package-lock.json'
-      folders-with-code:
-        description: The folders that contain code for the action
+      dirs-with-code:
+        description: The directories that contain code for the action
         required: false
         type: string
         default: 'src,dist'
@@ -32,18 +32,14 @@ on:
         description: The npm script to run to build the action
         required: false
         type: string
-        default: 'npm run build'
-    secrets:
-      PIPELINE_BOT_PAT:
-        description: 'A PAT with permission to commit changes on branch PRs.  This does not apply if the PR is from a fork.'
-        required: false
+        default: '' # For actions that need to be compiled, this will usually be 'npm run build'
 
 jobs:
-  setup-build:
+  setup:
     runs-on: ubuntu-latest
     outputs:
-      NEXT_VERSION: ${{ steps.version.outputs.NEXT_VERSION }}
       HAS_SOURCE_CODE_CHANGES: ${{ steps.source-code.outputs.HAS_CHANGES }}
+      NEXT_VERSION: ${{ steps.version.outputs.NEXT_VERSION }}
 
     steps:
       - name: Checkout
@@ -52,42 +48,50 @@ jobs:
           ref: ${{ inputs.default-branch }}
           fetch-depth: 0
 
-      - name: Get the next version for the repo
-        id: version
-        uses: im-open/git-version-lite@v2
-
-      - name: The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}
-        run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
-
       - name: Check for code changes to the action source code
         id: source-code
         uses: im-open/did-custom-action-code-change@v1
         with:
-          files-with-code: ${{ inputs.files-with-code}} # Default is 'action.yml,package.json,package-lock.json'
-          folders-with-code: ${{ inputs.folders-with-code }} # Default is 'src,dist'
+          files-with-code: ${{ inputs.files-with-code}}   # Default is 'action.yml,package.json,package-lock.json'
+          folders-with-code: ${{ inputs.dirs-with-code }} # Default is 'src,dist'
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: The PR has source code changes - ${{ steps.source-code.outputs.HAS_CHANGES }}
-        run: echo "The PR has source code changes (not just things like readmes or builds) - ${{ steps.source-code.outputs.HAS_CHANGES}}"
+      - name: Action Source Code Changed - ${{ steps.source-code.outputs.HAS_CHANGES }}
+        run: |
+          if [ "${{ steps.source-code.outputs.HAS_CHANGES }}" == "true" ]; then
+            echo "The PR changes the action's source code.  Proceed with subsequent steps."
+          else
+            echo "The PR does not change the action's source code.  Skipping subsequent steps."
+          fi
+
+      - name: Get the next version for the repo
+        if: steps.source-code.outputs.HAS_CHANGES == 'true'
+        id: version
+        uses: im-open/git-version-lite@v2
+
+      - name: The next action version will be - ${{ steps.version.outputs.NEXT_VERSION || 'N/A'}}
+        if: steps.source-code.outputs.HAS_CHANGES == 'true'
+        run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
 
   build-and-review-pr:
     runs-on: ubuntu-latest
-    needs: [setup-build]
+    needs: [setup]
 
     env:
-      NEXT_VERSION: ${{ needs.setup-build.outputs.NEXT_VERSION }}
-      HAS_CODE_CHANGES: ${{ needs.setup-build.outputs.HAS_SOURCE_CODE_CHANGES }}
+      NEXT_VERSION: ${{ needs.setup.outputs.NEXT_VERSION }}
+      HAS_CODE_CHANGES: ${{ needs.setup.outputs.HAS_SOURCE_CODE_CHANGES }}
       IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
       PR_SOURCE: ${{ github.event.pull_request.head.repo.fork == true && 'fork' || 'branch' }}
       NEEDS_COMMIT: false
+      FAILURE_MESSAGE: ''
 
     steps:
       - name: Action Source Code Changed - ${{ env.HAS_CODE_CHANGES }}
         run: |
           if [ "${{env.HAS_CODE_CHANGES}}" == "true" ]; then
-            echo "The PR changes the action's source code.  Proceed with subsequent steps."
+            echo "The PR changes the action's source code.  Proceed with subsequent steps and jobs."
           else
-            echo "The PR does not change the action's source code.  Skipping subsequent steps."
+            echo "The PR does not change the action's source code.  Skipping subsequent steps and jobs."
           fi
 
       # The remaining steps in this build will use the env.HAS_CODE_CHANGES condition.  Setting it on each
@@ -97,72 +101,67 @@ jobs:
         if: env.HAS_CODE_CHANGES == 'true'
         run: echo "The PR can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
 
-      - name: Checkout branch with pipeline-bot creds
-        if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'false'
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.PIPELINE_BOT_PAT }}
-          fetch-depth: 0
-
-      - name: Checkout fork with default gh-actions creds
-        if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'true'
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Build and Recompile action
-        if: env.HAS_CODE_CHANGES == 'true'
-        run: ${{ inputs.build-command }} # Default value is 'npm run build'
+      - name: Build and Recompile action (if applicable)
+        if: env.HAS_CODE_CHANGES == 'true' && inputs.build-command != ''
+        run: ${{ inputs.build-command }} # Typical value is '' or 'npm run build'
 
       - name: Update readme with next version - ${{ env.NEXT_VERSION }}
         if: env.HAS_CODE_CHANGES == 'true'
         uses: im-open/update-action-version-in-file@v1
         with:
           file-to-update: ${{ inputs.readme-location }} # Default: './README.md'
-          action-name: ${{ inputs.action-name }} # Default: '${{ github.repository }}'
+          action-name: ${{ inputs.action-name }}        # Default: 'github.repository'
           updated-version: ${{ env.NEXT_VERSION }}
 
-      - name: Check for unstaged recompile or readme changes
+      - name: Check for unstaged changes
         if: env.HAS_CODE_CHANGES == 'true'
         run: |
           if [[ "$(git status --porcelain)" != "" ]]; then
-            echo "There are changes to commit"
+            echo "There are  PR Contribution changes to commit"
             echo "NEEDS_COMMIT=true" >> "$GITHUB_ENV"
           else
-            echo "There were no changes to commit"
+            echo "There were no  PR Contribution changes to commit"
             echo "NEEDS_COMMIT=false" >> "$GITHUB_ENV"
           fi
 
-      # --------------------------------------------
-      # Steps for PRs that are from Repo Branches
-      # --------------------------------------------
-      - name: If there are outstanding changes on the branch - Commit unstaged changes
-        if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'false' &&  env.NEEDS_COMMIT == 'true'
-        run: |
-          git config user.name im-pipeline-bot
-          git config user.email im-pipeline-bot@wtwco.com
-
-          git add .
-          git commit -m "Update readme with latest tag and/or recompile the action."
-          git push origin HEAD:${{ github.head_ref }}
-
-      # -----------------------------------------
-      # Steps for PRs that are from Forked Repos
-      # -----------------------------------------
-      - name: If there are outstanding changes on the fork - Construct failing workflow summary
-        if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'true' &&  env.NEEDS_COMMIT == 'true'
+      - name: If there are outstanding changes - Construct failing workflow summary
+        if: env.HAS_CODE_CHANGES == 'true' &&  env.NEEDS_COMMIT == 'true'
         id: summary
         uses: actions/github-script@v6
         with:
           script: |
-            const summary = `This PR needs a few updates before it can be merged.  Please ensure the following steps have been manually completed:
-            - Recompile the action by running \`${{ inputs.build-command }}\` from the root of the repository
-            - Update the version for all instances of this action in the ${{ inputs.readme-location }} file.  It should be changed to: 
-              \`uses: ${{ inputs.action-name }}@${{ env.NEXT_VERSION }}\``;
-            core.setOutput('summary', summary);
+            const buildCmd = '${{ inputs.build-command }}';
+            const hasBuildStep =  buildCmd && buildCmd.trim().length > 0;
+            
+            const summary = `Before this PR can be merged, the following item(s) should be addressed to comply with the contribution guidelines:
+            - Please update every example in ${{ inputs.readme-location }} where this action is used  
+              - Each instance should be updated to: \`uses: ${{ inputs.action-name }}@${{ env.NEXT_VERSION }}\``;
+            if (hasBuildStep){
+              summary += `
+            - Please ensure the action has been recompiled by running: \`${{ inputs.build-command }}\` from the root of the repository`;
+            }
+            core.exportVariable('FAILURE_MESSAGE', summary);
 
-      - name: If there are outstanding changes on the fork - Fail the workflow
-        if: env.HAS_CODE_CHANGES == 'true' && env.IS_FORK == 'true' && env.NEEDS_COMMIT == 'true'
+      # This step will not run for forks because the GH_TOKEN cannot exceed 'read' for
+      # any scope. The token needs 'pull-requests:write' in order to create a comment.
+      - name: If there are outstanding changes - Comment on PR (branches only)
+        if: env.HAS_CODE_CHANGES == 'true' &&  env.NEEDS_COMMIT == 'true' && env.IS_FORK == 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '${{ env.FAILURE_MESSAGE }}'
+            })
+
+      - name: If there are outstanding changes - Fail the workflow
+        if: env.HAS_CODE_CHANGES == 'true' && env.NEEDS_COMMIT == 'true'
         run: |
-          echo '${{ steps.summary.outputs.summary }}' >> $GITHUB_STEP_SUMMARY
-          echo '::error::${{ steps.summary.outputs.summary }}'
+          echo '${{ env.FAILURE_MESSAGE }}' >> $GITHUB_STEP_SUMMARY
+          echo '::error::${{ env.FAILURE_MESSAGE }}'
           exit 1
