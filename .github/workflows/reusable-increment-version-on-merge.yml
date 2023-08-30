@@ -59,9 +59,9 @@ jobs:
         if: env.MERGE_TO_MAIN == 'true'
         run: |
           if [ "${{ steps.source-code.outputs.HAS_CHANGES }}" == "true" ]; then
-            echo "The PR changes the action's source code.  Proceed with subsequent steps."
+            echo "This PR changes the action's source code.  Proceed with subsequent steps."
           else
-            echo "The PR does not change the action's source code.  Skipping subsequent steps."
+            echo "This PR does not change the action's source code.  Skipping subsequent steps."
           fi
       
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Checkout
@@ -75,6 +75,7 @@ jobs:
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         id: version
         uses: im-open/git-version-lite@v2
+        # TODO:  do we need a tag-prefix arg?
 
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Print action version (${{ steps.version.outputs.NEXT_VERSION || 'N/A'}})
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
