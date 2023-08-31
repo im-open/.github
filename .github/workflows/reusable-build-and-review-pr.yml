@@ -62,10 +62,6 @@ on:
         required: false
         type: string
         default: '16.x'
-    secrets:
-      PIPELINE_BOT_PAT:
-        description: 'A PAT with permission to commit changes on branch PRs.  This does not apply if the PR is from a fork.'
-        required: false
 
 jobs:
   setup:
