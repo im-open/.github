@@ -1,22 +1,30 @@
+# This reusable workflow will check to see if an action's source code has changed based on
+# whether the PR includes files that match the files-with-code arg or are in one of the
+# dirs-with-code directories.  If there are source code changes, this reusable workflow
+# will then check the action, determine the next version and push the major, minor and
+# patch versions to the repository.
+
 name: Increment Version on Merge
 on:
   workflow_call:
     inputs:
       default-branch:
-        description: Default branch of which contains the tag
+        description: Default branch of the repository
         required: false
         type: string
         default: main
       files-with-code:
-        description: The files that contain code for the action
+        description: | 
+          The files that contain source code for the action.  Only files that affect the action's execution
+          should be included like action.yml or package.json.  Do not include files like README.md or .gitignore.
         required: false
         type: string
-        default: 'action.yml,package.json,package-lock.json'
       dirs-with-code:
-        description: The directories that contain code for the action
+        description: |
+          The directories that contain source code for the action.  Only directories that affect the action's
+          execution should be included like src or dist.  Do not include dirs like .github or node_modules.
         required: false
         type: string
-        default: 'src,dist'
 jobs:
   increment-version:
     runs-on: ubuntu-latest
@@ -51,11 +59,11 @@ jobs:
         id: source-code
         uses: im-open/did-custom-action-code-change@v1
         with:
-          files-with-code: ${{ inputs.files-with-code}}   # Default is 'action.yml,package.json,package-lock.json'
+          files-with-code: ${{ inputs.files-with-code}} # Default is 'action.yml,package.json,package-lock.json'
           folders-with-code: ${{ inputs.dirs-with-code }} # Default is 'src,dist'
           token: ${{ secrets.GITHUB_TOKEN }}
- 
-      - name: If PR is merged to ${{ inputs.default-branch }} - Print whether Action Source Code Changed - ${{ steps.source-code.outputs.HAS_CHANGES }}
+
+      - name: If PR is merged to ${{ inputs.default-branch }} - Print whether Action Source Code Changed (open for details)
         if: env.MERGE_TO_MAIN == 'true'
         run: |
           if [ "${{ steps.source-code.outputs.HAS_CHANGES }}" == "true" ]; then
@@ -63,7 +71,7 @@ jobs:
           else
             echo "This PR does not change the action's source code.  Skipping subsequent steps."
           fi
-      
+
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Checkout
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         uses: actions/checkout@v3
@@ -80,7 +88,7 @@ jobs:
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Print action version (${{ steps.version.outputs.NEXT_VERSION || 'N/A'}})
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
-    
+
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Push tags to repo
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         run: |
