@@ -80,15 +80,13 @@ jobs:
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         uses: actions/checkout@v3
         with:
-          ref: ${{ inputs.default-branch }}
           fetch-depth: 0
 
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Get the next version for the repo
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         id: version
         uses: im-open/git-version-lite@v2
-        # TODO:  do we need a tag-prefix arg?
-
+        
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Print action version (${{ steps.version.outputs.NEXT_VERSION || 'N/A'}})
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"
