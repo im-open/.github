@@ -1,0 +1,383 @@
+name: Build and Review PR
+run-name: 'Build and Review PR #${{ github.event.pull_request.number }}'
+
+on:
+  # https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token
+  #
+  # This workflow uses the pull_request trigger which prevents write permissions on the
+  # GH_TOKEN and secrets access from public forks.  This should remain as a pull_request
+  # trigger to minimize the access public forks have in the repository.  The reduced
+  # permissions are adequate but do mean that re-compiles and readme changes will have to be
+  # made manually by the PR author.  These auto-updates could be done by this workflow
+  # for branches but in order to re-trigger a PR build (which is needed for status checks),
+  # we would make the commits with a different user and their PAT.  To minimize exposure
+  # and complication we will request those changes be manually made by the PR author.
+  pull_request:
+    types: [opened, synchronize, reopened]
+  # paths:
+  #   Do not include specific paths here.  We always want this build to run and produce a
+  #   status check which are branch protection rules can use.  If this is skipped because of
+  #   path filtering, a status check will not be created and we won't be able to merge the PR
+  #   without disabling that requirement.  If we have a status check that is always produced,
+  #   we can also use that to require all branches be up to date before they are merged.
+
+env:
+  DID_CUSTOM_ACTION_CODE_CHANGE_DIR: '.github/actions/did-custom-action-code-change'
+  UPDATE_ACTION_VERSION_IN_FILE_DIR: '.github/actions/update-action-version-in-file'
+  IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+  PR_SOURCE: ${{ github.event.pull_request.head.repo.fork == true && 'fork' || 'branch' }}
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES: ${{ steps.did-custom-action-code-change.outputs.HAS_CHANGES }}
+      UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES: ${{ steps.update-action-version-in-file.outputs.HAS_CHANGES }}
+      
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Check if the 'did-custom-action-code-change' action changed
+        id: did-custom-action-code-change
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          folders-with-code: '${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }}'
+          files-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if the 'update-action-version-in-file' action changed
+        id: update-action-version-in-file
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          folders-with-code: '${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}'
+          files-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Action Changed - (open for details)
+        run: |
+          if [ "${{ steps.did-custom-action-code-change.outputs.HAS_CHANGES }}" == "true" ]; then
+            echo "This PR changes the 'did-custom-action-code-change' action."
+          else
+            echo "This PR does not change the 'did-custom-action-code-change' action."
+          fi
+          
+          if [ "${{ steps.update-action-version-in-file.outputs.HAS_CHANGES }}" == "true" ]; then
+            echo "This PR changes the 'update-action-version-in-file' action."
+          else
+            echo "This PR does not change the 'update-action-version-in-file' action."
+          fi
+
+  
+
+  review-did-custom-action-code-change:
+    runs-on: ubuntu-latest
+    needs: [setup]
+
+    env:
+      ACTION_NAME: 'did-custom-action-code-change'
+      HAS_CHANGES: ${{ needs.setup.outputs.DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES }}
+      NEEDS_BUILD_COMMIT: false # Set to true in a subsequent step if applicable
+
+    steps:
+      - name: Action Changed (open for details)
+        run: |
+          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+            echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent steps."
+          else
+            echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent steps."
+          fi
+
+      # ----------------------------------------------------------------------------------------------------
+      #
+      # The remaining steps in this build will use the env.HAS_CHANGES condition.  Setting it on each
+      # step rather than the job will ensure this job always runs and that we can use it for status checks.
+      #
+      # ----------------------------------------------------------------------------------------------------
+
+      - name: PR Source - ${{ env.PR_SOURCE }}
+        if: env.HAS_CHANGES == 'true'
+        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
+
+      - name: Checkout
+        if: env.HAS_CHANGES == 'true'
+        uses: actions/checkout@v3
+
+      # -----------------------------------
+      # Check if action has been recompiled
+      # -----------------------------------
+      - name: Setup Node 16.x
+        uses: actions/setup-node@v3
+        if: env.HAS_CHANGES == 'true'
+        with:
+          node-version: 16.x
+
+      - name:  Build the action
+        if: env.HAS_CHANGES == 'true'
+        working-directory: ${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }}}
+        run: npm run build
+
+      - name: Check for unstaged build changes (open for details)
+        if: env.HAS_CHANGES == 'true'
+        run: |
+          if [[ "$(git status --porcelain)" != "" ]]; then
+            echo "The '${{ env.ACTION_NAME }}' action needs to be re-built."
+            echo "NEEDS_BUILD_COMMIT=true" >> "$GITHUB_ENV"
+          else
+            echo "The '${{ env.ACTION_NAME }}' action has already been re-built"
+          fi
+
+      # -------------------------------------------
+      # Fail the workflow if the action needs to be recompiled
+      # -------------------------------------------
+      - name: Fail the workflow if the action needs to be recompiled
+        if: env.HAS_CHANGES == 'true' && env.NEEDS_BUILD_COMMIT == 'true'
+        id: summary
+        uses: actions/github-script@v6
+        with:
+          script: |
+
+            // Construct the instructions for fixing the PR
+            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the ${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }} directory:\n\`npm run build\``;
+
+            // Comment on PR for branches.  A fork's GH_TOKEN only has 'read' permission on all scopes so a comment cannot be made.
+            if (!${{ env.IS_FORK }}) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: instructions
+              })
+            }
+
+            // Add workflow summary & fail the build
+            core.summary
+              .addRaw(instructions)
+              .write();
+            core.setFailed(instructions);
+
+  test-did-custom-action-code-change:
+    runs-on: ubuntu-latest
+    needs: [setup]
+
+    env:
+      ACTION_NAME: 'did-custom-action-code-change'
+      HAS_CHANGES: ${{ needs.setup.outputs.DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES }}
+      
+    
+    steps:
+      - name: Action Changed (open for details)
+        run: |
+          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+            echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent tests."
+          else
+            echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent tests."
+          fi
+
+      # ----------------------------------------------------------------------------------------------------
+      # The remaining steps in this build will use the env.HAS_CHANGES condition.  Setting it on each
+      # step rather than the job will ensure this job always runs and that we can use it for status checks.
+      # ----------------------------------------------------------------------------------------------------
+
+      # -------------------------------------------
+      # SETUP
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: Setup - Checkout
+        if: env.HAS_CHANGES == 'true'
+        uses: actions/checkout@v3
+
+      # -------------------------------------------
+      # SCENARIO 1
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      
+      - name: When something happens
+        if: always() && env.HAS_CHANGES == 'true'
+        run: ''
+  
+  review-update-action-version-in-file:
+    runs-on: ubuntu-latest
+    needs: [setup]
+
+    env:
+      ACTION_NAME: 'update-action-version-in-file'
+      HAS_CHANGES: ${{ needs.setup.outputs.UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES }}
+      NEEDS_BUILD_COMMIT: false # Set to true in a subsequent step if applicable
+
+    steps:
+      - name: Action Changed (open for details)
+        run: |
+          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+            echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent steps."
+          else
+            echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent steps."
+          fi
+
+      # ----------------------------------------------------------------------------------------------------
+      #
+      # The remaining steps in this build will use the env.HAS_CHANGES condition.  Setting it on each
+      # step rather than the job will ensure this job always runs and that we can use it for status checks.
+      #
+      # ----------------------------------------------------------------------------------------------------
+
+      - name: PR Source - ${{ env.PR_SOURCE }}
+        if: env.HAS_CHANGES == 'true'
+        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
+
+      - name: Checkout
+        if: env.HAS_CHANGES == 'true'
+        uses: actions/checkout@v3
+
+      # -----------------------------------
+      # Check if action has been recompiled
+      # -----------------------------------
+      - name: Setup Node 16.x
+        uses: actions/setup-node@v3
+        if: env.HAS_CHANGES == 'true'
+        with:
+          node-version: 16.x
+
+      - name:  Build the action
+        if: env.HAS_CHANGES == 'true'
+        working-directory: ${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}}
+        run: npm run build
+
+      - name: Check for unstaged build changes (open for details)
+        if: env.HAS_CHANGES == 'true'
+        run: |
+          if [[ "$(git status --porcelain)" != "" ]]; then
+            echo "The '${{ env.ACTION_NAME }}' action needs to be re-built."
+            echo "NEEDS_BUILD_COMMIT=true" >> "$GITHUB_ENV"
+          else
+            echo "The '${{ env.ACTION_NAME }}' action has already been re-built"
+          fi
+
+      # -------------------------------------------
+      # Fail the workflow if the action needs to be recompiled
+      # -------------------------------------------
+      - name: Fail the workflow if the action needs to be recompiled
+        if: env.HAS_CHANGES == 'true' && env.NEEDS_BUILD_COMMIT == 'true'
+        id: summary
+        uses: actions/github-script@v6
+        with:
+          script: |
+
+            // Construct the instructions for fixing the PR
+            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the ${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }} directory:\n\`npm run build\``;
+
+            // Comment on PR for branches.  A fork's GH_TOKEN only has 'read' permission on all scopes so a comment cannot be made.
+            if (!${{ env.IS_FORK }}) {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: instructions
+              })
+            }
+
+            // Add workflow summary & fail the build
+            core.summary
+              .addRaw(instructions)
+              .write();
+            core.setFailed(instructions);
+
+  test-update-action-version-in-file:
+    runs-on: ubuntu-latest
+    needs: [setup]
+
+    env:
+      ACTION_NAME: 'update-action-version-in-file'
+      HAS_CHANGES: ${{ needs.setup.outputs.UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES }}
+      
+    
+    steps:
+      - name: Action Changed (open for details)
+        run: |
+          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+            echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent tests."
+          else
+            echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent tests."
+          fi
+
+      # ----------------------------------------------------------------------------------------------------
+      # The remaining steps in this build will use the env.HAS_CHANGES condition.  Setting it on each
+      # step rather than the job will ensure this job always runs and that we can use it for status checks.
+      # ----------------------------------------------------------------------------------------------------
+
+      # -------------------------------------------
+      # SETUP
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: Setup - Checkout
+        if: env.HAS_CHANGES == 'true'
+        uses: actions/checkout@v3
+
+      #--------------------------------------
+      # FILE HAS CHANGES
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      - name: When updating a file with a new action version
+        uses: ./
+        if: always()
+        id: changes
+        with:
+          file-to-update: ./test/files/file-to-update.md
+          action-name: im-open/update-action-version-in-file
+          version-prefix: p
+          updated-version: v1.0.0
+          
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.changes.outcome }}"
+
+      - name: And the has-changes output should be true
+        if: always()
+        run: ./test/assert-values-match.sh --name "has-changes" --expected "true" --actual "${{ steps.changes.outputs.has-changes }}"
+      
+      - name: And the updated-content output should have updated action versions
+        if: always()
+        run: |
+          expectedContent=$(cat ./test/files/expected-output.md)
+          ./test/assert-values-match.sh --name "updated-content" --expected "$expectedContent" --actual "${{ steps.changes.outputs.updated-content }}"
+      
+
+      #--------------------------------------
+      # FILE HAS NO CHANGES
+      #--------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+      - name: When updating a file with a new action version
+        uses: ./
+        if: always()
+        id: no-changes
+        with:
+          file-to-update: ./test/files/file-to-update.md
+          action-name: im-open/different-action-version
+          version-prefix: v
+          updated-version: v1.0.0
+          
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.no-changes.outcome }}"
+
+      - name: And the has-changes output should be false
+        if: always()
+        run: ./test/assert-values-match.sh --name "has-changes" --expected "false" --actual "${{ steps.no-changes.outputs.has-changes }}"
+      
+      - name: And the updated-content output should be the original content
+        if: always()
+        run: |
+          expectedContent=$(cat ./test/files/file-to-update.md)
+          ./test/assert-values-match.sh --name "updated-content" --expected "$expectedContent" --actual "${{ steps.no-changes.outputs.updated-content }}"
+
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
