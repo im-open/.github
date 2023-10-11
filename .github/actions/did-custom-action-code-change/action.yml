@@ -12,6 +12,15 @@ inputs:
   token:
     description: 'Token used to retrieve the PR information'
     required: true
+  pr-number:
+    description: The PR number to check for changes.  Defaults to the current PR (github.context.issue.number) if not specified.
+    required: false
+  org:
+    description: The org where the PR to check lives.  Defaults to the current PR's org (github.context.repo.owner) if not specified.
+    required: false
+  repo:
+    description: The org where the PR to check lives.  Defaults to the current PR's repo (github.context.repo.repo) if not specified.
+    required: false
 
 outputs:
   HAS_CHANGES:

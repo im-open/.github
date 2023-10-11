@@ -2406,8 +2406,8 @@ var require_context = __commonJS({
       }
       get repo() {
         if (process.env.GITHUB_REPOSITORY) {
-          const [owner, repo] = process.env.GITHUB_REPOSITORY.split('/');
-          return { owner, repo };
+          const [owner, repo2] = process.env.GITHUB_REPOSITORY.split('/');
+          return { owner, repo: repo2 };
         }
         if (this.payload.repository) {
           return {
@@ -16595,27 +16595,66 @@ var requiredArgOptions = {
   required: true,
   trimWhitespace: true
 };
-var filesToCheckForChangesInput = core.getInput('files-with-code') || '';
-var filesToCheckForChanges = filesToCheckForChangesInput.split(',');
-var foldersToCheckForChangesInput = core.getInput('folders-with-code') || '';
-var foldersToCheckForChanges = foldersToCheckForChangesInput.split(',');
+var fileInput = core.getInput('files-with-code') || '';
+var filesToCheckForChanges = fileInput && fileInput.length > 0 ? fileInput.split(',') : null;
+var folderInput = core.getInput('folders-with-code') || '';
+var foldersToCheckForChanges = folderInput && folderInput.length > 0 ? folderInput.split(',') : null;
+var prNumber = core.getInput('pr-number') || github.context.issue.number;
+var org = core.getInput('org') || github.context.repo.owner;
+var repo = core.getInput('repo') || github.context.repo.repo;
 var token = core.getInput('token', requiredArgOptions);
 var octokit = github.getOctokit(token);
-async function getPRFiles(org, repo, prNumber) {
+function getPrFolders(prFiles) {
+  const prFoldersSet = new Set();
+  if (prFiles) {
+    prFiles.forEach(f => {
+      const folder = f.substring(0, f.lastIndexOf('/'));
+      prFoldersSet.add(folder);
+      let baseFolder = '';
+      folder.split('/').forEach((fp, index) => {
+        prFoldersSet.add(fp);
+        baseFolder = index === 0 ? fp : `${baseFolder}/${fp}`;
+        prFoldersSet.add(baseFolder);
+      });
+    });
+  }
+  const prFolders = Array.from(prFoldersSet).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
+  if (prFolders.length > 0) {
+    core.info(`
+The following folders have changes in the PR:
+	${prFolders.join('\n	')}`);
+  } else {
+    core.info(`
+No folders had changes in the PR.`);
+  }
+  return prFolders;
+}
+async function getPRFiles(org2, repo2, prNumber2) {
+  let prFilesSet = new Set();
   let prFiles = [];
   await octokit
     .paginate(octokit.rest.pulls.listFiles, {
-      owner: org,
-      repo,
-      pull_number: prNumber
+      owner: org2,
+      repo: repo2,
+      pull_number: prNumber2
     })
     .then(prFileResponse => {
-      prFiles = prFileResponse.map(prf => prf.filename);
+      prFiles = prFileResponse.map(prf => prf.filename).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
+      prFiles.forEach(f => {
+        const fileParts = f.split('/');
+        prFilesSet.add(fileParts[fileParts.length - 1]);
+        prFilesSet.add(f);
+      });
     })
     .catch(error => {
-      core.error(`An error occurred retrieving the PR files: ${error.message}`);
+      core.error(`
+An error occurred retrieving the PR files: ${error.message}`);
     });
-  return prFiles;
+  const filesToReturn = Array.from(prFilesSet).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
+  core.info(`
+The following files have changes in the PR:
+	${filesToReturn.join('\n	')}`);
+  return filesToReturn;
 }
 async function run() {
   const eventName = github.context.eventName;
@@ -16623,14 +16662,34 @@ async function run() {
     core.setFailed('The workflow must have a pull_request or pull_request_target trigger.');
     return;
   }
-  const org = github.context.repo.owner;
-  const repo = github.context.repo.repo;
-  const prNumber = github.context.issue.number;
+  core.info(`org: ${org}`);
+  core.info(`repo: ${repo}`);
+  core.info(`prNumber: ${prNumber}`);
   const filesChangedInPr = await getPRFiles(org, repo, prNumber);
-  const foldersChangedInPr = filesChangedInPr.filter(f => f.includes('/')).map(f => f.split('/')[0]);
-  const matchingFiles = filesToCheckForChanges.filter(f => filesChangedInPr.includes(f)) || [];
-  const matchingFolders = foldersToCheckForChanges.filter(f => foldersChangedInPr.includes(f)) || [];
-  const hasMatchingChanges = matchingFiles.length > 0 || matchingFolders.length > 0;
+  const foldersChangedInPr = getPrFolders(filesChangedInPr);
+  let hasMatchingChanges = false;
+  let matchingFiles = [];
+  let matchingFolders = [];
+  if (filesToCheckForChanges && filesToCheckForChanges.length > 0) {
+    matchingFiles = filesToCheckForChanges.filter(f => filesChangedInPr.includes(f)) || [];
+    if (matchingFiles.length > 0) {
+      hasMatchingChanges = true;
+      const joinedFiles = `
+	${matchingFiles.join('\n	')}`;
+      core.info(`
+The following files have changes in the PR and match the files to check for changes:${joinedFiles}`);
+    }
+  }
+  if (foldersToCheckForChanges && foldersToCheckForChanges.length > 0) {
+    matchingFolders = foldersToCheckForChanges.filter(f => foldersChangedInPr.includes(f)) || [];
+    if (matchingFolders.length > 0) {
+      hasMatchingChanges = true;
+      const joinedFolders = `
+	${matchingFolders.join('\n	')}`;
+      core.info(`
+The following folders have changes in the PR and match the folders to check for changes:${joinedFolders}`);
+    }
+  }
   core.setOutput('HAS_CHANGES', hasMatchingChanges);
   core.exportVariable('CODE_HAS_CHANGED', hasMatchingChanges);
 }

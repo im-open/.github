@@ -28,17 +28,23 @@ env:
   PR_SOURCE: ${{ github.event.pull_request.head.repo.fork == true && 'fork' || 'branch' }}
 
 jobs:
-  setup:
+  review-did-custom-action-code-change:
     runs-on: ubuntu-latest
+
     outputs:
-      DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES: ${{ steps.did-custom-action-code-change.outputs.HAS_CHANGES }}
-      UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES: ${{ steps.update-action-version-in-file.outputs.HAS_CHANGES }}
-      
+      HAS_CHANGES: ${{ env.HAS_CHANGES }}
+
+    env:
+      ACTION_NAME: 'did-custom-action-code-change'
+      HAS_CHANGES: '' # Set in the Action Changed step below
+      NEEDS_BUILD_COMMIT: false # Set to true in a subsequent step if applicable
+
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+
+      - name: PR Source - ${{ env.PR_SOURCE }}
+        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
 
       - name: Check if the 'did-custom-action-code-change' action changed
         id: did-custom-action-code-change
@@ -48,43 +54,11 @@ jobs:
           files-with-code: ''
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Check if the 'update-action-version-in-file' action changed
-        id: update-action-version-in-file
-        uses: ./.github/actions/did-custom-action-code-change
-        with:
-          folders-with-code: '${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}'
-          files-with-code: ''
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Action Changed - (open for details)
-        run: |
-          if [ "${{ steps.did-custom-action-code-change.outputs.HAS_CHANGES }}" == "true" ]; then
-            echo "This PR changes the 'did-custom-action-code-change' action."
-          else
-            echo "This PR does not change the 'did-custom-action-code-change' action."
-          fi
-          
-          if [ "${{ steps.update-action-version-in-file.outputs.HAS_CHANGES }}" == "true" ]; then
-            echo "This PR changes the 'update-action-version-in-file' action."
-          else
-            echo "This PR does not change the 'update-action-version-in-file' action."
-          fi
-
-  
-
-  review-did-custom-action-code-change:
-    runs-on: ubuntu-latest
-    needs: [setup]
-
-    env:
-      ACTION_NAME: 'did-custom-action-code-change'
-      HAS_CHANGES: ${{ needs.setup.outputs.DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES }}
-      NEEDS_BUILD_COMMIT: false # Set to true in a subsequent step if applicable
-
-    steps:
       - name: Action Changed (open for details)
         run: |
-          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+          hasChanges="${{steps.did-custom-action-code-change.outputs.HAS_CHANGES }}";
+          echo "HAS_CHANGES=$hasChanges" >> $GITHUB_ENV
+          if [ "$hasChanges" == "true" ]; then
             echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent steps."
           else
             echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent steps."
@@ -97,14 +71,6 @@ jobs:
       #
       # ----------------------------------------------------------------------------------------------------
 
-      - name: PR Source - ${{ env.PR_SOURCE }}
-        if: env.HAS_CHANGES == 'true'
-        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
-
-      - name: Checkout
-        if: env.HAS_CHANGES == 'true'
-        uses: actions/checkout@v3
-
       # -----------------------------------
       # Check if action has been recompiled
       # -----------------------------------
@@ -114,9 +80,9 @@ jobs:
         with:
           node-version: 16.x
 
-      - name:  Build the action
+      - name: Build the action
         if: env.HAS_CHANGES == 'true'
-        working-directory: ${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }}}
+        working-directory: ${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }}
         run: npm run build
 
       - name: Check for unstaged build changes (open for details)
@@ -140,7 +106,7 @@ jobs:
           script: |
 
             // Construct the instructions for fixing the PR
-            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the ${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }} directory:\n\`npm run build\``;
+            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the\n"${{ env.DID_CUSTOM_ACTION_CODE_CHANGE_DIR }}" directory:\n`npm run build`';
 
             // Comment on PR for branches.  A fork's GH_TOKEN only has 'read' permission on all scopes so a comment cannot be made.
             if (!${{ env.IS_FORK }}) {
@@ -160,13 +126,23 @@ jobs:
 
   test-did-custom-action-code-change:
     runs-on: ubuntu-latest
-    needs: [setup]
+    needs: [review-did-custom-action-code-change]
+    if: always()
 
     env:
       ACTION_NAME: 'did-custom-action-code-change'
-      HAS_CHANGES: ${{ needs.setup.outputs.DID_CUSTOM_ACTION_CODE_CHANGE_ACTION_HAS_CHANGES }}
+      HAS_CHANGES: ${{ needs.review-did-custom-action-code-change.outputs.HAS_CHANGES }}
+      CODE_HAS_CHANGED: ''
+      PR: 5
       
-    
+      PR5_FILE_FULL: '.github/actions/did-custom-action-code-change/action.yml'
+      PR5_FILE_SNIPPET: 'action.yml'
+      PR5_FILE_UNCHANGED: 'this-is-a-file-that-does-not-exist.md'
+
+      PR5_FOLDER_FULL: '.github/actions/did-custom-action-code-change'
+      PR5_FOLDER_SNIPPET: 'did-custom-action-code-change'
+      PR5_FOLDER_UNCHANGED: 'folder-that-does-not-exist'
+      
     steps:
       - name: Action Changed (open for details)
         run: |
@@ -188,32 +164,205 @@ jobs:
         run: echo ""
 
       - name: Setup - Checkout
-        if: env.HAS_CHANGES == 'true'
+        if: always() && env.HAS_CHANGES == 'true'
         uses: actions/checkout@v3
 
       # -------------------------------------------
-      # SCENARIO 1
+      # FULL FILE PATH THAT MATCHES
       # -------------------------------------------
       - name: '-------------------------------------------------------------------------------------------------------'
         run: echo ""
-      
-      - name: When something happens
+
+      - name: When checking the pr with a full file name that has changes
         if: always() && env.HAS_CHANGES == 'true'
-        run: ''
-  
+        id: full-file
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: '${{ env.PR5_FILE_FULL}}'
+          folders-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.full-file.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be true
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.full-file.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      # -------------------------------------------
+      # SNIPPET OF FILE PATH THAT MATCHES
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: When checking the pr with a snippet of a file name that has changes
+        if: always() && env.HAS_CHANGES == 'true'
+        id: file-snippet
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: '${{ env.PR5_FILE_SNIPPET }}'
+          folders-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.file-snippet.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be true
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.file-snippet.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      # -------------------------------------------
+      # FILE PATH THAT DOES NOT MATCH
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: When checking the pr with a file name that does not have changes
+        if: always() && env.HAS_CHANGES == 'true'
+        id: file-no-match
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: '${{ env.PR5_FILE_UNCHANGED}}'
+          folders-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.file-no-match.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be false
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "false" --actual "${{ steps.file-no-match.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "false" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      # -------------------------------------------
+      # FULL FOLDER PATH THAT MATCHES
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: When checking the pr with a full folder path that has changes
+        if: always() && env.HAS_CHANGES == 'true'
+        id: folder-full
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: ''
+          folders-with-code: '${{ env.PR5_FOLDER_FULL }}'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-full.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be true
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.folder-full.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      # -------------------------------------------
+      # SNIPPET OF FOLDER PATH THAT MATCHES
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: When checking the pr with a snippet of a folder path that has changes
+        if: always() && env.HAS_CHANGES == 'true'
+        id: folder-snippet
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: ''
+          folders-with-code: '${{ env.PR5_FOLDER_SNIPPET }}'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-snippet.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be true
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.folder-snippet.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      # -------------------------------------------
+      # FOLDER PATH THAT DOES NOT MATCH
+      # -------------------------------------------
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
+      - name: When checking the pr with a folder that does not have changes
+        if: always() && env.HAS_CHANGES == 'true'
+        id: folder-no-match
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          files-with-code: ''
+          folders-with-code: '${{ env.PR5_FOLDER_UNCHANGED }}'
+          token: ${{ secrets.GITHUB_TOKEN }}
+          pr-number: ${{ env.PR}}
+
+      - name: Then the outcome should be success
+        if: always()
+        run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-no-match.outcome }}"
+
+      - name: Then the HAS_CHANGES output and environment vars should be false
+        if: always()
+        run: |
+          ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "false" --actual "${{ steps.folder-no-match.outputs.HAS_CHANGES }}"
+          ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "false" --actual "${{ env.CODE_HAS_CHANGED }}"
+          echo "CODE_HAS_CHANGED=" >> $GITHUB_ENV
+
+      - name: '-------------------------------------------------------------------------------------------------------'
+        run: echo ""
+
   review-update-action-version-in-file:
     runs-on: ubuntu-latest
-    needs: [setup]
+
+    outputs:
+      HAS_CHANGES: ${{ env.HAS_CHANGES }}
 
     env:
       ACTION_NAME: 'update-action-version-in-file'
-      HAS_CHANGES: ${{ needs.setup.outputs.UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES }}
+      HAS_CHANGES: '' # Set in the Action Changed step below
       NEEDS_BUILD_COMMIT: false # Set to true in a subsequent step if applicable
 
     steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: PR Source - ${{ env.PR_SOURCE }}
+        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
+
+      - name: Check if the 'update-action-version-in-file' action changed
+        id: update-action-version-in-file
+        uses: ./.github/actions/did-custom-action-code-change
+        with:
+          folders-with-code: '${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}'
+          files-with-code: ''
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Action Changed (open for details)
         run: |
-          if [ "${{env.HAS_CHANGES}}" == "true" ]; then
+          hasChanges="${{ steps.update-action-version-in-file.outputs.HAS_CHANGES }}";
+          echo "HAS_CHANGES=$hasChanges" >> $GITHUB_ENV
+          if [ "$hasChanges" == "true" ]; then
             echo "This PR changes the '${{ env.ACTION_NAME }}' action.  Proceed with subsequent steps."
           else
             echo "This PR does not change the '${{ env.ACTION_NAME }}' action.  Skipping subsequent steps."
@@ -226,14 +375,6 @@ jobs:
       #
       # ----------------------------------------------------------------------------------------------------
 
-      - name: PR Source - ${{ env.PR_SOURCE }}
-        if: env.HAS_CHANGES == 'true'
-        run: echo "PRs can come from a branch or a fork.  This PR is from a ${{ env.PR_SOURCE }}."
-
-      - name: Checkout
-        if: env.HAS_CHANGES == 'true'
-        uses: actions/checkout@v3
-
       # -----------------------------------
       # Check if action has been recompiled
       # -----------------------------------
@@ -243,9 +384,9 @@ jobs:
         with:
           node-version: 16.x
 
-      - name:  Build the action
+      - name: Build the action
         if: env.HAS_CHANGES == 'true'
-        working-directory: ${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}}
+        working-directory: ${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}
         run: npm run build
 
       - name: Check for unstaged build changes (open for details)
@@ -269,7 +410,7 @@ jobs:
           script: |
 
             // Construct the instructions for fixing the PR
-            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the ${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }} directory:\n\`npm run build\``;
+            const instructions = 'Before this PR can be merged, please recompile the action by running the following command from the\n"${{ env.UPDATE_ACTION_VERSION_IN_FILE_DIR }}" directory:\n`npm run build`';
 
             // Comment on PR for branches.  A fork's GH_TOKEN only has 'read' permission on all scopes so a comment cannot be made.
             if (!${{ env.IS_FORK }}) {
@@ -289,13 +430,13 @@ jobs:
 
   test-update-action-version-in-file:
     runs-on: ubuntu-latest
-    needs: [setup]
+    needs: [review-update-action-version-in-file]
+    if: always()
 
     env:
       ACTION_NAME: 'update-action-version-in-file'
-      HAS_CHANGES: ${{ needs.setup.outputs.UPDATE_ACTION_VERSION_IN_FILE_ACTION_HAS_CHANGES }}
-      
-    
+      HAS_CHANGES: ${{ needs.review-update-action-version-in-file.outputs.HAS_CHANGES }}
+
     steps:
       - name: Action Changed (open for details)
         run: |
@@ -317,7 +458,7 @@ jobs:
         run: echo ""
 
       - name: Setup - Checkout
-        if: env.HAS_CHANGES == 'true'
+        if: always() && env.HAS_CHANGES == 'true'
         uses: actions/checkout@v3
 
       #--------------------------------------
@@ -325,56 +466,57 @@ jobs:
       #--------------------------------------
       - name: '-------------------------------------------------------------------------------------------------------'
         run: echo ""
+
       - name: When updating a file with a new action version
-        uses: ./
-        if: always()
+        uses: ./.github/actions/update-action-version-in-file
+        if: always() && env.HAS_CHANGES == 'true'
         id: changes
         with:
           file-to-update: ./test/files/file-to-update.md
           action-name: im-open/update-action-version-in-file
           version-prefix: p
           updated-version: v1.0.0
-          
+
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.changes.outcome }}"
 
       - name: And the has-changes output should be true
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "has-changes" --expected "true" --actual "${{ steps.changes.outputs.has-changes }}"
-      
+
       - name: And the updated-content output should have updated action versions
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           expectedContent=$(cat ./test/files/expected-output.md)
           ./test/assert-values-match.sh --name "updated-content" --expected "$expectedContent" --actual "${{ steps.changes.outputs.updated-content }}"
-      
 
       #--------------------------------------
       # FILE HAS NO CHANGES
       #--------------------------------------
       - name: '-------------------------------------------------------------------------------------------------------'
         run: echo ""
+
       - name: When updating a file with a new action version
-        uses: ./
-        if: always()
+        uses: ./.github/actions/update-action-version-in-file
+        if: always() && env.HAS_CHANGES == 'true'
         id: no-changes
         with:
           file-to-update: ./test/files/file-to-update.md
           action-name: im-open/different-action-version
           version-prefix: v
           updated-version: v1.0.0
-          
+
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.no-changes.outcome }}"
 
       - name: And the has-changes output should be false
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "has-changes" --expected "false" --actual "${{ steps.no-changes.outputs.has-changes }}"
-      
+
       - name: And the updated-content output should be the original content
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           expectedContent=$(cat ./test/files/file-to-update.md)
           ./test/assert-values-match.sh --name "updated-content" --expected "$expectedContent" --actual "${{ steps.no-changes.outputs.updated-content }}"
