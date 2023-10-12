@@ -1,0 +1,30 @@
+name: check-if-pr-has-code-changes
+
+description: Determines if changes were made to a specific files or folders in a PR
+
+inputs:
+  files-with-code:
+    description: 'A comma separated list of files to check for changes.'
+    required: false
+  folders-with-code:
+    description: 'A comma separated list of folders to check for changes.'
+    required: false
+  token:
+    description: 'Token used to retrieve the PR information'
+    required: true
+  pr-number:
+    description: The PR number to check for changes.  Defaults to the current PR (github.context.issue.number) if not specified.
+    required: false
+  org:
+    description: The org where the PR to check lives.  Defaults to the current PR's org (github.context.repo.owner) if not specified.
+    required: false
+  repo:
+    description: The org where the PR to check lives.  Defaults to the current PR's repo (github.context.repo.repo) if not specified.
+    required: false
+
+outputs:
+  HAS_CHANGES:
+    description: 'Flag indicating whether changes were found in the code files or code folders.'
+runs:
+  using: 'node16'
+  main: 'dist/index.js'
