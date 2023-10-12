@@ -16630,8 +16630,7 @@ No folders had changes in the PR.`);
   return prFolders;
 }
 async function getPRFiles(org2, repo2, prNumber2) {
-  let prFilesSet = new Set();
-  let prFiles = [];
+  const prFilesSet = new Set();
   await octokit
     .paginate(octokit.rest.pulls.listFiles, {
       owner: org2,
@@ -16639,7 +16638,7 @@ async function getPRFiles(org2, repo2, prNumber2) {
       pull_number: prNumber2
     })
     .then(prFileResponse => {
-      prFiles = prFileResponse.map(prf => prf.filename).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
+      const prFiles = prFileResponse.map(prf => prf.filename).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
       prFiles.forEach(f => {
         const fileParts = f.split('/');
         prFilesSet.add(fileParts[fileParts.length - 1]);

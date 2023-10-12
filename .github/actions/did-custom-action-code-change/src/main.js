@@ -49,8 +49,7 @@ function getPrFolders(prFiles) {
 }
 
 async function getPRFiles(org, repo, prNumber) {
-  let prFilesSet = new Set();
-  let prFiles = [];
+  const prFilesSet = new Set();
   await octokit
     .paginate(octokit.rest.pulls.listFiles, {
       owner: org,
@@ -58,7 +57,7 @@ async function getPRFiles(org, repo, prNumber) {
       pull_number: prNumber
     })
     .then(prFileResponse => {
-      prFiles = prFileResponse.map(prf => prf.filename).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
+      const prFiles = prFileResponse.map(prf => prf.filename).sort((a, b) => (a > b ? 1 : b > a ? -1 : 0));
       prFiles.forEach(f => {
         const fileParts = f.split('/');
         prFilesSet.add(fileParts[fileParts.length - 1]); // Just the file.ext
