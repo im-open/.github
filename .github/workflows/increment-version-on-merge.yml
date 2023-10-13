@@ -33,4 +33,4 @@ jobs:
       default-branch: main
       # We only want to increment the version if these reusable workflows change
       files-with-code: 'reusable-build-and-review-pr.yml,reusable-increment-version-on-merge.yml'
-      dirs-with-code: ''
+      dirs-with-code: 'actions'

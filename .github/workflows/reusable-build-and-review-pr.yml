@@ -10,6 +10,10 @@
 #  - The main README.md is at the root of the repo
 #  - The README contains a contribution guidelines and usage examples section
 
+# ----------------------------------------------------------------------------------
+# NOTE: A copy of this workflow exists in git-version-lite.  If changes are made to
+#       this workflow, the corresponding changes should be made in git-version-lite
+# ----------------------------------------------------------------------------------
 name: Build and Review PR
 
 on:
@@ -78,7 +82,7 @@ jobs:
 
       - name: Check for code changes to the action source code
         id: source-code
-        uses: im-open/did-custom-action-code-change@v1
+        uses: im-open/.github/.github/actions/did-custom-action-code-change@v1
         with:
           files-with-code: ${{ inputs.files-with-code}}   # Default is 'action.yml,package.json,package-lock.json'
           folders-with-code: ${{ inputs.dirs-with-code }} # Default is 'src,dist'
@@ -168,7 +172,7 @@ jobs:
       - name: ${{ env.README }} - Update version to @${{ env.NEXT_VERSION }}
         if: env.HAS_CODE_CHANGES == 'true'
         id: update-readme
-        uses: im-open/update-action-version-in-file@v1
+        uses: im-open/.github/.github/actions/update-action-version-in-file@v1
         with:
           file-to-update: ./${{ env.README }} # Default: 'README.md'
           action-name: ${{ inputs.action-name }} # Default: 'github.repository'
