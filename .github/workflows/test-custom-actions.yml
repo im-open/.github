@@ -184,11 +184,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.full-file.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be true
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.full-file.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
@@ -211,11 +211,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.file-snippet.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be true
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.file-snippet.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
@@ -238,11 +238,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.file-no-match.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be false
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "false" --actual "${{ steps.file-no-match.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "false" --actual "${{ env.CODE_HAS_CHANGED }}"
@@ -265,11 +265,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-full.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be true
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.folder-full.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
@@ -292,11 +292,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-snippet.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be true
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "true" --actual "${{ steps.folder-snippet.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "true" --actual "${{ env.CODE_HAS_CHANGED }}"
@@ -319,11 +319,11 @@ jobs:
           pr-number: ${{ env.PR}}
 
       - name: Then the outcome should be success
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: ./test/assert-values-match.sh --name "step outcome" --expected "success" --actual "${{ steps.folder-no-match.outcome }}"
 
       - name: Then the HAS_CHANGES output and environment vars should be false
-        if: always()
+        if: always() && env.HAS_CHANGES == 'true'
         run: |
           ./test/assert-values-match.sh --name "HAS_CHANGES" --expected "false" --actual "${{ steps.folder-no-match.outputs.HAS_CHANGES }}"
           ./test/assert-values-match.sh --name "CODE_HAS_CHANGED" --expected "false" --actual "${{ env.CODE_HAS_CHANGED }}"
