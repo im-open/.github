@@ -4,6 +4,10 @@
 # will then check the action, determine the next version and push the major, minor and
 # patch versions to the repository.
 
+# ----------------------------------------------------------------------------------
+# NOTE: A copy of this workflow exists in git-version-lite.  If changes are made to
+#       this workflow, the corresponding changes should be made in git-version-lite
+# ----------------------------------------------------------------------------------
 name: Increment Version on Merge
 on:
   workflow_call:
@@ -14,7 +18,7 @@ on:
         type: string
         default: main
       files-with-code:
-        description: | 
+        description: |
           The files that contain source code for the action.  Only files that affect the action's execution
           should be included like action.yml or package.json.  Do not include files like README.md or .gitignore.
         required: false
@@ -86,7 +90,7 @@ jobs:
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         id: version
         uses: im-open/git-version-lite@v2
-        
+
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Print action version (${{ steps.version.outputs.NEXT_VERSION || 'N/A'}})
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
         run: echo "The next action version will be - ${{ steps.version.outputs.NEXT_VERSION }}"

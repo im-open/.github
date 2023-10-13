@@ -10,6 +10,10 @@
 #  - The main README.md is at the root of the repo
 #  - The README contains a contribution guidelines and usage examples section
 
+# ----------------------------------------------------------------------------------
+# NOTE: A copy of this workflow exists in git-version-lite.  If changes are made to
+#       this workflow, the corresponding changes should be made in git-version-lite
+# ----------------------------------------------------------------------------------
 name: Build and Review PR
 
 on:
