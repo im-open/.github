@@ -1,5 +1,7 @@
 # did-custom-action-code-change
 
+Make a little change here so the tests for this action are run.
+
 This action outputs a flag indicating whether the changes in the PR were to code files and code folders so the build workflow knows whether the action version should be incremented or not. It does this by gathering the list of files and folders changed in a PR through the GH API. The action then compares that list against the list of `files-with-code` and `folders-with-code` to determine if any of those source code items were changed.
 
 This action isn't intended to be used as a standalone action.  It should be used within the reusable build workflows for im-open actions.
