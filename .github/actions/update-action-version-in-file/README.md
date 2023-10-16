@@ -1,5 +1,7 @@
 # update-action-version-in-file
 
+Make a little change here so the tests for this action are run.
+
 This action looks for usages of a specified GitHub action so it can update each instance with the latest version. It will return the updated content as an output and it can optionally save the changes to disk.
 
 This action isn't intended to be used as a standalone action.  It should be used within the reusable build workflows for im-open actions.
