@@ -65,7 +65,7 @@ on:
         description: The version of node to build the action with.
         required: false
         type: string
-        default: '16.x'
+        default: '20.x'
 
 jobs:
   setup:
@@ -76,7 +76,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -141,16 +141,16 @@ jobs:
 
       - name: Checkout
         if: env.HAS_CODE_CHANGES == 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # -----------------------------------
       # Check if action has been recompiled
       # -----------------------------------
       - name: If action has build step - Setup Node ${{ inputs.node-version }}
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         if: env.HAS_CODE_CHANGES == 'true' && env.HAS_BUILD_STEP == 'true'
         with:
-          node-version: ${{ inputs.node-version }} # Default is 16.x
+          node-version: ${{ inputs.node-version }} # Default is 20.x
 
       - name: If action has build step - Build the action
         if: env.HAS_CODE_CHANGES == 'true' && env.HAS_BUILD_STEP == 'true'
@@ -194,7 +194,7 @@ jobs:
       - name: Fail the workflow if there are any outstanding changes
         if: env.HAS_CODE_CHANGES == 'true' &&  (env.NEEDS_BUILD_COMMIT == 'true' || env.NEEDS_README_COMMIT == 'true')
         id: summary
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
 
