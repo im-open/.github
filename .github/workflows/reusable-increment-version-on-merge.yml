@@ -38,7 +38,7 @@ jobs:
     steps:
       - name: Check if merge to default branch
         id: merge
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             const defaultBranch = '${{ inputs.default-branch }}';
@@ -60,7 +60,7 @@ jobs:
 
       - name: Checkout
         if: env.MERGE_TO_MAIN == 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: If PR is merged to ${{ inputs.default-branch }} - Check for code changes to the action source code
         if: env.MERGE_TO_MAIN == 'true'
@@ -82,7 +82,7 @@ jobs:
 
       - name: If PR is merged to ${{ inputs.default-branch }} & PR has source code changes - Checkout
         if: env.MERGE_TO_MAIN == 'true' && steps.source-code.outputs.HAS_CHANGES == 'true'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
