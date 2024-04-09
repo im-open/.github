@@ -191,6 +191,18 @@ jobs:
           else
             echo "${{ inputs.readme-name }} does not need version updates."
           fi
+      
+      - name: upload re-compiled action if there are changes
+        if: always() && env.NEEDS_BUILD_COMMIT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: action
+          path: |
+            ./dist/
+            ./src/
+            ./package.json
+            ./package-lock.json
+          retention-days: 5
 
       # -------------------------------------------
       # Fail the workflow if any updates are needed
