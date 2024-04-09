@@ -159,9 +159,13 @@ jobs:
       - name: If action has build step - Check for unstaged build changes (open for details)
         if: env.HAS_CODE_CHANGES == 'true' && env.HAS_BUILD_STEP == 'true'
         run: |
-          if [[ "$(git status --porcelain)" != "" ]]; then
+          status="$(git status --porcelain)"
+          if [[ "$status" != "" ]]; then
             echo "The action needs to be re-built"
             echo "NEEDS_BUILD_COMMIT=true" >> "$GITHUB_ENV"
+            
+            echo "The following files have changes:"
+            echo "$status"
           else
             echo "The action has already been re-built"
           fi
