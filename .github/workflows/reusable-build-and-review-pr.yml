@@ -247,6 +247,16 @@ jobs:
               .write();
             core.setFailed(instructions);
       
+      # Sometimes a user's local build doesn't match the runner environment no matter what settings are changed.
+      #  Upload a copy of dist/ in that case so the user can update their branch with a runner compiled version.
+      - name: Upload a copy of dist/index.js if the action needs to be recompiled
+        if: env.HAS_CODE_CHANGES == 'true' &&  env.NEEDS_BUILD_COMMIT == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
       # ----------------------------------------------------
       # Add comment if Contributing Guidelines are satisfied
       # ----------------------------------------------------
