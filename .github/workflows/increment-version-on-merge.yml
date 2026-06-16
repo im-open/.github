@@ -26,6 +26,9 @@ on:
   pull_request_target:
     types: [closed]
 
+permissions:
+  contents: read
+
 jobs:
   increment-version:
     uses: ./.github/workflows/reusable-increment-version-on-merge.yml
