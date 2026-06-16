@@ -26,5 +26,5 @@ outputs:
   HAS_CHANGES:
     description: 'Flag indicating whether changes were found in the code files or code folders.'
 runs:
-  using: 'node20'
+  using: 'node24'
   main: 'dist/index.js'
