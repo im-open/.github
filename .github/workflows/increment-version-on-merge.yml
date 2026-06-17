@@ -27,7 +27,7 @@ on:
     types: [closed]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   increment-version:
