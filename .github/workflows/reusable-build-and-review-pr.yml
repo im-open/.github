@@ -82,7 +82,7 @@ jobs:
 
       - name: Check for code changes to the action source code
         id: source-code
-        uses: im-open/.github/.github/actions/did-custom-action-code-change@v1
+        uses: im-open/.github/.github/actions/did-custom-action-code-change@v2
         with:
           files-with-code: ${{ inputs.files-with-code}}   # Default is 'action.yml,package.json,package-lock.json'
           folders-with-code: ${{ inputs.dirs-with-code }} # Default is 'src,dist'
@@ -99,7 +99,7 @@ jobs:
       - name: Get the next version for the repo
         if: steps.source-code.outputs.HAS_CHANGES == 'true'
         id: version
-        uses: im-open/git-version-lite@v2
+        uses: im-open/git-version-lite@v4
 
       - name: The next action version will be - ${{ steps.version.outputs.NEXT_VERSION || 'N/A'}}
         if: steps.source-code.outputs.HAS_CHANGES == 'true'
@@ -172,7 +172,7 @@ jobs:
       - name: ${{ env.README }} - Update version to @${{ env.NEXT_VERSION }}
         if: env.HAS_CODE_CHANGES == 'true'
         id: update-readme
-        uses: im-open/.github/.github/actions/update-action-version-in-file@v1
+        uses: im-open/.github/.github/actions/update-action-version-in-file@v2
         with:
           file-to-update: ./${{ env.README }} # Default: 'README.md'
           action-name: ${{ inputs.action-name }} # Default: 'github.repository'
